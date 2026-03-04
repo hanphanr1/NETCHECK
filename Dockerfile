@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Cài đặt dependencies cơ bản và thư viện cho Chrome/ChromeDriver
+# Cài đặt dependencies cơ bản và thư viện cho Chrome
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -20,24 +20,16 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Thêm key và cài Chrome stable
+# Thêm key Google và cài Chrome stable + chromedriver
 RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /etc/apt/trusted.gpg.d/google.gpg \
     && echo "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/google.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
-    && apt-get update && apt-get install -y google-chrome-stable \
+    && apt-get update && apt-get install -y google-chrome-stable chromedriver \
     && rm -rf /var/lib/apt/lists/*
 
-# Lấy phiên bản Chrome và tải ChromeDriver tương ứng
-RUN set -eux; \
-    CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f1-3); \
-    echo "Detected Chrome version: $CHROME_VERSION"; \
-    wget -q "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip; \
-    unzip -q /tmp/chromedriver.zip -d /tmp; \
-    ls -l /tmp/chromedriver-linux64; \
-    mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver; \
-    chmod +x /usr/local/bin/chromedriver; \
-    rm -rf /tmp/chromedriver*
+# Kiểm tra cài đặt (không bắt buộc)
+RUN which chromedriver && chromedriver --version
 
-# Copy requirements và cài đặt Python packages
+# Copy requirements và cài Python packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
