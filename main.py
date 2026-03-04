@@ -462,9 +462,9 @@ async def check_account(email: str, password: str) -> str:
     # Thử requests trước
     result = check_with_requests(email, password)
 
-    # Nếu requests timeout hoặc lỗi mạng, thử Selenium
-    if result["reason"] in ["TIMEOUT", "MAT_KET_NOI_MANG", "LOI_TRUY_CAP"]:
-        logger.info(f"[Requests] Thất bại, thử Selenium cho {email}")
+    # Neu requests fail (bat ki loi nao), thu Selenium
+    if not result["valid"]:
+        logger.info(f"[Requests] That bai, thu Selenium cho {email}")
         result = check_with_selenium(email, password)
 
     if result["valid"]:
@@ -538,8 +538,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Kiem tra mat khau truoc (quan trong nhat)
             login_result = check_with_requests(info['email'], info['password'])
 
-            # Neu requests timeout/ loi, thu Selenium
-            if login_result["reason"] in ["TIMEOUT", "MAT_KET_NOI_MANG", "LOI_TRUY_CAP"]:
+            # Neu requests fail (bat ki loi nao), thu Selenium
+            if not login_result["valid"]:
                 logger.info(f"[Requests] That bai, thu Selenium cho {info['email']}")
                 login_result = check_with_selenium(info['email'], info['password'])
 
