@@ -251,9 +251,14 @@ def format_account_result_v2(info: dict, login_result: dict, cookie_result: dict
             "KHONG_XAC_DINH": "❌ KHÔNG_XÁC_ĐỊNH",
             "LOI_TRUY_CAP": "❌ LỖI_TRUY_CẬP",
             "SELENIUM_LOI": "❌ LỖI_DICH_VU",
-            "KHONG_VERIFY_DUOC": "❌ KHÔNG_VERIFY ĐƯỢC"
+            "KHONG_VERIFY_DUOC": "⚠️ KHÔNG_VERIFY ĐƯỢC",
+            "CURRENT_MEMBER": "✅ HOẠT ĐỘNG"
         }
-        status = reason_map.get(login_reason, f"❌ {login_reason}")
+
+        if login_reason == "CURRENT_MEMBER":
+            status = "✅ HOẠT ĐỘNG"
+        else:
+            status = reason_map.get(login_reason, f"❌ {login_reason}")
         status_detail = login_reason
 
     # Cookie chi hien thi phu
@@ -540,28 +545,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Đang phân tích {len(parsed_accounts)} tài khoản (format mới)...")
 
         for info in parsed_accounts:
-            # Kiem tra mat khau truoc (quan trong nhat)
-            login_result = check_with_requests(info['email'], info['password'])
+            # Netflix block server, chi hien thi thong tin tai khoan
+            # Lay status tu thong tin nguon
+            status_from_info = info.get('membership_status', '')
+            if status_from_info == 'CURRENT_MEMBER':
+                login_result = {"valid": True, "reason": "CURRENT_MEMBER", "method": "info"}
+            elif info.get('user_on_hold', '') == 'true':
+                login_result = {"valid": False, "reason": "TAI_KHOAN_BI_KHOA_TAM", "method": "info"}
+            else:
+                login_result = {"valid": False, "reason": "KHONG_VERIFY_DUOC", "method": "info"}
 
-            # Neu requests fail, thu Selenium (bo qua neu Selenium loi)
-            if not login_result["valid"]:
-                try:
-                    logger.info(f"[Requests] That bai, thu Selenium cho {info['email']}")
-                    login_result = check_with_selenium(info['email'], info['password'])
-                except Exception as e:
-                    logger.warning(f"[Selenium] That bai, bo qua: {e}")
-                    # Ca 2 fail -> hien thi thong tin tai khoan
-                    login_result = {"valid": False, "reason": "KHONG_VERIFY_DUOC", "method": "none"}
+            # Cookie
+            cookie_result = {"valid": False, "reason": "KHONG_KIEM_TRA"}
 
-            # Neu login thanh cong thi khong can kiem tra cookie nua
-            cookie_result = {"valid": False, "reason": "BO_QUA"}
-            if info['cookie'] and not login_result["valid"]:
-                try:
-                    cookie_result = check_cookie_validity(info['cookie'])
-                except Exception as e:
-                    cookie_result = {"valid": False, "reason": f"LOI: {str(e)[:30]}"}
-
-            # Format ket qua - uu tien mat khau
+            # Format ket qua
             result = format_account_result_v2(info, login_result, cookie_result)
             await update.message.reply_text(result)
             await asyncio.sleep(1)
