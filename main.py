@@ -8,8 +8,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -109,10 +107,8 @@ def check_with_selenium(email: str, password: str) -> bool:
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=chrome_options
-    )
+    # Khởi tạo driver – không dùng Service, chromedriver đã có trong PATH
+    driver = webdriver.Chrome(options=chrome_options)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     try:
@@ -135,7 +131,7 @@ def check_with_selenium(email: str, password: str) -> bool:
         login_button.click()
 
         # Đợi chuyển hướng (có thể lâu hơn nếu mạng chậm)
-        time.sleep(8)  # tăng từ 5 lên 8 giây
+        time.sleep(8)
 
         # Kiểm tra URL hiện tại
         current_url = driver.current_url
@@ -206,12 +202,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for email, password in accounts:
         result = await check_account(email, password)
         await update.message.reply_text(result)
-        await asyncio.sleep(1)  # Tránh spam
+        await asyncio.sleep(1)
 
     await update.message.reply_text(f"✅ Hoàn thành! Đã kiểm tra {len(accounts)} tài khoản.")
 
 def main():
-    """Khởi chạy bot."""
     application = Application.builder().token(BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
