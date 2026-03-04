@@ -142,7 +142,7 @@ def check_cookie_validity(cookie_str: str) -> dict:
             "https://www.netflix.com/api/shakti/v4f72bc24/profileNavigation",
             headers=headers,
             cookies=cookies,
-            timeout=15
+            timeout=30
         )
 
         if resp.status_code == 200:
@@ -159,7 +159,7 @@ def check_cookie_validity(cookie_str: str) -> dict:
             "https://www.netflix.com/browse",
             headers=headers,
             cookies=cookies,
-            timeout=15,
+            timeout=30,
             allow_redirects=False
         )
 
