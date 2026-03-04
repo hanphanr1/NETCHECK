@@ -1,19 +1,40 @@
 FROM python:3.10-slim
 
-# Cài đặt dependencies cơ bản
+# Cai dat dependencies co ban va thu vien cho Chrome
 RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    unzip \
     curl \
+    libnss3 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxdamage1 \
+    libxi6 \
+    libxtst6 \
+    libxrandr2 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements và cài Python packages
+# Them key Google va cai Chrome stable + chromedriver
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /etc/apt/trusted.gpg.d/google.gpg \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/google.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
+    && apt-get update && apt-get install -y google-chrome-stable chromedriver \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements va cai Python packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy mã nguồn
+# Copy ma nguon
 COPY main.py .
 
-# Biến môi trường cho bot token
+# Bien moi truong cho bot token
 ENV BOT_TOKEN=""
 
-# Chạy bot
+# Chay bot
 CMD ["python", "main.py"]
