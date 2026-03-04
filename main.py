@@ -250,7 +250,8 @@ def format_account_result_v2(info: dict, login_result: dict, cookie_result: dict
             "TAI_KHOAN_HET_HAN": "❌ HẾT_HẠN",
             "KHONG_XAC_DINH": "❌ KHÔNG_XÁC_ĐỊNH",
             "LOI_TRUY_CAP": "❌ LỖI_TRUY_CẬP",
-            "SELENIUM_LOI": "❌ LỖI_DICH_VU"
+            "SELENIUM_LOI": "❌ LỖI_DICH_VU",
+            "KHONG_VERIFY_DUOC": "❌ KHÔNG_VERIFY ĐƯỢC"
         }
         status = reason_map.get(login_reason, f"❌ {login_reason}")
         status_detail = login_reason
@@ -482,7 +483,8 @@ async def check_account(email: str, password: str) -> str:
             "LOI_TRUY_CAP": "LỖI_TRUY_CẬP",
             "TIMEOUT": "TIMEOUT",
             "MAT_KET_NOI_MANG": "MẤT_KẾT_NỐI_MẠNG",
-            "SELENIUM_LOI": "LOI_DICH_VU"
+            "SELENIUM_LOI": "LOI_DICH_VU",
+            "KHONG_VERIFY_DUOC": "KHONG_VERIFY_DUOC"
         }
         reason_text = reason_map.get(result["reason"], result["reason"])
         return f"❌ {email}:{password} | {reason_text}"
@@ -541,10 +543,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Kiem tra mat khau truoc (quan trong nhat)
             login_result = check_with_requests(info['email'], info['password'])
 
-            # Neu requests fail (bat ki loi nao), thu Selenium
+            # Neu requests fail, thu Selenium (bo qua neu Selenium loi)
             if not login_result["valid"]:
-                logger.info(f"[Requests] That bai, thu Selenium cho {info['email']}")
-                login_result = check_with_selenium(info['email'], info['password'])
+                try:
+                    logger.info(f"[Requests] That bai, thu Selenium cho {info['email']}")
+                    login_result = check_with_selenium(info['email'], info['password'])
+                except Exception as e:
+                    logger.warning(f"[Selenium] That bai, bo qua: {e}")
+                    # Ca 2 fail -> hien thi thong tin tai khoan
+                    login_result = {"valid": False, "reason": "KHONG_VERIFY_DUOC", "method": "none"}
 
             # Neu login thanh cong thi khong can kiem tra cookie nua
             cookie_result = {"valid": False, "reason": "BO_QUA"}
