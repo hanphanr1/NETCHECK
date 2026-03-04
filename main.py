@@ -249,7 +249,8 @@ def format_account_result_v2(info: dict, login_result: dict, cookie_result: dict
             "LOI_THANH_TOAN": "❌ LỖI_THANH_TOÁN",
             "TAI_KHOAN_HET_HAN": "❌ HẾT_HẠN",
             "KHONG_XAC_DINH": "❌ KHÔNG_XÁC_ĐỊNH",
-            "LOI_TRUY_CAP": "❌ LỖI_TRUY_CẬP"
+            "LOI_TRUY_CAP": "❌ LỖI_TRUY_CẬP",
+            "SELENIUM_LOI": "❌ LỖI_DICH_VU"
         }
         status = reason_map.get(login_reason, f"❌ {login_reason}")
         status_detail = login_reason
@@ -445,7 +446,8 @@ def check_with_selenium(email: str, password: str) -> dict:
 
     except Exception as e:
         logger.error(f"[Selenium] Lỗi: {e}")
-        return {"valid": False, "reason": f"LOI: {str(e)[:50]}", "method": "selenium"}
+        # Selenium fail -> tra ve loi cu the
+        return {"valid": False, "reason": "SELENIUM_LOI", "method": "selenium", "error": str(e)[:30]}
     finally:
         if driver:
             driver.quit()
@@ -479,7 +481,8 @@ async def check_account(email: str, password: str) -> str:
             "KHONG_XAC_DINH": "KHÔNG_XÁC_ĐỊNH",
             "LOI_TRUY_CAP": "LỖI_TRUY_CẬP",
             "TIMEOUT": "TIMEOUT",
-            "MAT_KET_NOI_MANG": "MẤT_KẾT_NỐI_MẠNG"
+            "MAT_KET_NOI_MANG": "MẤT_KẾT_NỐI_MẠNG",
+            "SELENIUM_LOI": "LOI_DICH_VU"
         }
         reason_text = reason_map.get(result["reason"], result["reason"])
         return f"❌ {email}:{password} | {reason_text}"
