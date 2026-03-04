@@ -26,11 +26,7 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --d
     && apt-get update && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Cai chromedriver tu Chrome
-RUN chrome_version=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+') \
-    && wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${chrome_version}/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip \
-    && unzip -o /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip
+# Selenium se tu dong tai chromedriver
 
 # Copy requirements va cai Python packages
 COPY requirements.txt .
