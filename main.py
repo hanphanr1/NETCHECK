@@ -347,7 +347,8 @@ def check_with_requests(email: str, password: str) -> dict:
             if "your account is on hold" in resp_text or "tai khoan bi tam dung" in resp_text:
                 return {"valid": False, "reason": "TAI_KHOAN_BI_KHOA_TAM", "method": "requests"}
 
-            if "payment" in resp_text and ("issue" in resp_text or "problem" in resp_text):
+            # Payment error check - chi khi co loi cu the
+            if "payment method is invalid" in resp_text or "card has been declined" in resp_text:
                 return {"valid": False, "reason": "LOI_THANH_TOAN", "method": "requests"}
 
             if "expired" in resp_text or "het han" in resp_text:
